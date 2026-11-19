@@ -32,7 +32,8 @@ export function Login() {
       }
     } catch (err) {
       const m = (err as Error).message || '';
-      if (/database error|single-user|registration is closed/i.test(m)) setMsg(t('authClosed'));
+      if (/signups? (are|is) disabled|signup.*not allowed/i.test(m)) setMsg(t('authSignupsOff'));
+      else if (/database error|single-user|registration is closed/i.test(m)) setMsg(t('authClosed'));
       else if (/invalid login|invalid credentials/i.test(m)) setMsg(t('authBadCreds'));
       else if (/not confirmed/i.test(m)) setMsg(t('authConfirm'));
       else if (/fetch|network|load failed/i.test(m) || !navigator.onLine) setMsg(t('authOffline'));
