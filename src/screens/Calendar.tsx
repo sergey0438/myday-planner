@@ -31,14 +31,23 @@ function weekTitle(lang: 'ru' | 'uk', start: string) {
 }
 const HOUR_H = 60;
 
-// The click that ends a drag must not open the task.
-let lastDragEnd = 0;
+// The click that the browser fires right after a drag ends must not open a task.
+let dragInProgress = false;
+let suppressClickUntil = 0;
+function shouldSuppressClick() {
+  if (dragInProgress) return true;
+  if (Date.now() < suppressClickUntil) {
+    suppressClickUntil = 0; // only the first click
+    return true;
+  }
+  return false;
+}
 
 function Draggable({ id, occ, children }: { id: string; occ: Occurrence; children: ReactNode }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id, data: { occ } });
   return (
-    <div ref={setNodeRef} {...attributes} {...listeners}
-      onClickCapture={(e) => { if (Date.now() - lastDragEnd < 400) { e.stopPropagation(); e.preventDefault(); } }} className={cn('touch-manipulation', isDragging && 'opacity-30')} style={{ WebkitUserSelect: 'none' }}>
+    <div ref={setNodeRef} {...attributes} {...listeners} data-draggable
+ className={cn('touch-manipulation', isDragging && 'opacity-30')} style={{ WebkitUserSelect: 'none' }}>
       {children}
     </div>
   );
@@ -66,6 +75,14 @@ export function Calendar() {
   const [filter, setFilter] = useState<string | null>(null);
 
   useEffect(() => { try { localStorage.setItem('myday-cal-view', view); } catch { /* ignore */ } }, [view]);
+  useEffect(() => {
+    const block = (e: MouseEvent) => {
+      const onTask = (e.target as Element | null)?.closest?.('[data-draggable]');
+      if (onTask && shouldSuppressClick()) { e.stopPropagation(); e.preventDefault(); }
+    };
+    document.addEventListener('click', block, true);
+    return () => document.removeEventListener('click', block, true);
+  }, []);
 
   const visible = useMemo(() => (filter ? tasks.filter((x) => x.categoryId === filter) : tasks), [tasks, filter]);
   const sensors = useSensors(
@@ -80,12 +97,14 @@ export function Calendar() {
   };
 
   const onDragStart = (e: DragStartEvent) => {
+    dragInProgress = true;
     setDragging((e.active.data.current as { occ: Occurrence }).occ);
     haptic(12);
   };
   const onDragEnd = (e: DragEndEvent) => {
     setDragging(null);
-    lastDragEnd = Date.now();
+    dragInProgress = false;
+    suppressClickUntil = Date.now() + 300;
     const occ = (e.active.data.current as { occ: Occurrence } | undefined)?.occ;
     const target = e.over?.data.current as { date: string; hour?: number } | undefined;
     if (!occ || !target) return;
@@ -125,7 +144,7 @@ export function Calendar() {
         </div>
       </header>
 
-      <DndContext sensors={sensors} collisionDetection={collision} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
+      <DndContext sensors={sensors} collisionDetection={collision} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => { setDragging(null); dragInProgress = false; }}>
         {view === 'day' && <DayView date={cursor} today={today} tasks={visible} onOpen={open} onPick={setCursor} weekStartsOn={settings.weekStartsOn} />}
         {view === 'week' && <WeekView date={cursor} today={today} tasks={visible} onOpen={open} weekStartsOn={settings.weekStartsOn}
           onPickDay={(d) => { setCursor(d); setView('day'); }} />}

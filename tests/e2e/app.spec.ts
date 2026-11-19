@@ -187,6 +187,8 @@ test('calendar: day / week / month views, navigation and drag to another day', a
 
   // navigation
   const before = await page.getByTestId('calendar-title').textContent();
+  // dnd-kit swallows the first click right after a drop; a person never clicks that fast
+  await page.waitForTimeout(400);
   await page.getByRole('button', { name: 'next' }).click();
   await expect(page.getByTestId('calendar-title')).not.toHaveText(before!);
   await page.getByTestId('cal-today').click();
