@@ -208,7 +208,11 @@ test('sync: created on iPhone appears on iPad; completed on iPad shows on iPhone
   await syncNow(iphone.page);
   await expect.poll(() => [...mock.tables.tasks.values()].some((r) => r.title === 'Задача с iPhone')).toBe(true);
 
+  await expect.poll(() => mock.tables.categories.size).toBe(7); // default categories uploaded once
+
   await signIn(ipad.page);
+  await syncNow(ipad.page);
+  expect(mock.tables.categories.size).toBe(7); // no duplicates from the second device
   await expect(ipad.page.getByTestId('task-card').filter({ hasText: 'Задача с iPhone' }).first()).toBeVisible();
   await ipad.page.getByTestId('task-card').filter({ hasText: 'Задача с iPhone' }).first().getByRole('button', { name: 'Завершить' }).click();
   await syncNow(ipad.page);

@@ -142,9 +142,21 @@ class AppStore {
         sort: i, builtin: b.key, deleted: false, createdAt: now, updatedAt: now, version: 0,
       };
       this.catMap.set(c.id, c);
+      // Not queued yet: if the account already has categories in the cloud, those win.
+      // See pushUnsyncedSeeds(), called after the first successful sync.
       await this.local.putEntity('categories', c);
-      await this.engine.recordLocalChange('categories', c.id, undefined);
     }
+  }
+
+  private async pushUnsyncedSeeds() {
+    let queued = false;
+    for (const c of this.catMap.values()) {
+      if (c.version === 0 && c.builtin && !(await this.local.getOutboxItem(`categories:${c.id}`))) {
+        await this.engine.recordLocalChange('categories', c.id, undefined);
+        queued = true;
+      }
+    }
+    if (queued) await this.refreshPending();
   }
 
   private onSession(session: Session | null) {
@@ -164,7 +176,16 @@ class AppStore {
         },
       );
       void this.pullSettings();
-      this.scheduleSync(0);
+      void (async () => {
+        try {
+          await this.engine.pull(); // cloud categories first, so local defaults never overwrite them
+          await this.onEngineChange({ table: 'categories' });
+          await this.pushUnsyncedSeeds();
+        } catch {
+          /* offline: retried by the regular sync */
+        }
+        this.scheduleSync(0);
+      })();
     }
     if (!session) {
       this.unsubRealtime?.();
